@@ -1,11 +1,12 @@
 package visitor;
+
 import syntaxtree.*;
-import java.util.Hashtable;
-import java.util.Enumeration;
+
+import java.util.ArrayList;
 
 public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
 
-  SymbolTable symbolTable;
+  private SymbolTable symbolTable;
 
   public BuildSymbolTableVisitor() {
     symbolTable = new SymbolTable();
@@ -24,7 +25,7 @@ public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
   // These two variables help keep track of the current scope.
   private Class currClass;
   private Method currMethod;
- 
+
   // Note: Because in MiniJava there is no nested scopes and all local 
   // variables can only be declared at the beginning of a method. This "hack"
   // uses two variables instead of a stack to track nested level.
@@ -33,86 +34,85 @@ public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
   // MainClass m;
   // ClassDeclList cl;
   public Type visit(Program n) {
-    n.m.accept(this);  // Main class declaration
+    // Main class declaration
+    n.m.accept(this);
 
     // Declaration of remaining classes
-    for ( int i = 0; i < n.cl.size(); i++ ) {
-        n.cl.elementAt(i).accept(this);
+    for (int i = 0; i < n.cl.size(); i++) {
+      n.cl.elementAt(i).accept(this);
     }
+
     return null;
   }
-  
+
   // Identifier i1 (name of class),i2 (name of argument in main();
   // Statement s;
   public Type visit(MainClass n) {
-     symbolTable.addClass( n.i1.toString(), null); 
-     currClass = symbolTable.getClass(n.i1.toString());
-      
-    //this is an ugly hack.. but its not worth having a Void and
-    //String[] type just for one occourance
-    currClass.addMethod("main", new IdentifierType("void"));
-    currMethod = currClass.getMethod("main");
-    currMethod.addParam(n.i2.toString(), new IdentifierType("String []"));
+    // this is an ugly hack.. but its not worth having a Void and
+    // String[] type just for one occourance
+    // The beginLine and beginColumn are no meaning here
 
-    //currMethod = new Method ("main", new IdentifierType("void"));
-    //currMethod.addVar(n.i2.toString(),
-		      //new IdentifierType("String[]"));
+    symbolTable.addClass(n.i1.toString(), null, -1, -1);
+    currClass = symbolTable.getClass(n.i1.toString());
+    currClass.addMethod("main", new IdentifierType("void"), new FormalList(), 0, 0);
+    currMethod = currClass.getMethod(new ArrayList<>(), "main");
 
-    for ( int i = 0; i < n.vl.size(); i++ ) {
+    for (int i = 0; i < n.vl.size(); i++) {
       n.vl.elementAt(i).accept(this);
     }
 
     n.s.accept(this);
 
     currMethod = null;
-          
+
     return null;
   }
-  
+
   // Identifier i;  (Class name)
   // VarDeclList vl;  (Field declaration)
   // MethodDeclList ml; (Method declaration)
   public Type visit(ClassDeclSimple n) {
-    if (!symbolTable.addClass( n.i.toString(), null)){
+    String id = n.i.toString();
 
-	System.out.println("Class " +  n.i.toString()
-			   + "is already defined" ); 
-	System.exit(-1);
+    if (!symbolTable.addClass(id, null, 0, 0)) {
+      Class conflictedClass = symbolTable.getClass(id);
+      System.err.printf("%s: class Redeclaration (%s,%s; %s,%s)%n", id, conflictedClass.getBeginLine(), conflictedClass.getBeginColumn(), 0, 0);
     }
 
     // Entering a new class scope (no need to explicitly leave a class scope)
-    currClass =  symbolTable.getClass(n.i.toString());
+    currClass = symbolTable.getClass(id);
 
     // Process field declaration
-    for ( int i = 0; i < n.vl.size(); i++ ) {
+    for (int i = 0; i < n.vl.size(); i++) {
       n.vl.elementAt(i).accept(this);
     }
 
     // Process method declaration
-    for ( int i = 0; i < n.ml.size(); i++ ) {
+    for (int i = 0; i < n.ml.size(); i++) {
       n.ml.elementAt(i).accept(this);
     }
     return null;
   }
- 
+
   // Identifier i; (Class name)
   // Identifier j; (Superclass's name)
   // VarDeclList vl;  (Field declaration)
   // MethodDeclList ml; (Method declaration)
   public Type visit(ClassDeclExtends n) {
-    if (!symbolTable.addClass( n.i.toString(),  n.j.toString())) {
-      System.out.println("Class " +  n.i.toString()
-			   + "is already defined" ); 
-      System.exit(-1);
+    String id = n.i.toString();
+
+    if (!symbolTable.addClass(id, n.j.toString(), 0, 0)) {
+      Class conflictedClass = symbolTable.getClass(id);
+      System.err.printf("%s: class Redeclaration (%s,%s; %s,%s)%n", id, conflictedClass.getBeginLine(), conflictedClass.getBeginColumn(), 0, 0);
     }
 
     // Entering a new class scope (no need to explicitly leave a class scope)
-    currClass = symbolTable.getClass(n.i.toString());
-  
-    for ( int i = 0; i < n.vl.size(); i++ ) {
+    currClass = symbolTable.getClass(id);
+
+    for (int i = 0; i < n.vl.size(); i++) {
       n.vl.elementAt(i).accept(this);
     }
-    for ( int i = 0; i < n.ml.size(); i++ ) {
+    for (int i = 0; i < n.ml.size(); i++) {
       n.ml.elementAt(i).accept(this);
     }
     return null;
@@ -123,27 +123,33 @@ public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
   //
   // Field delcaration or local variable declaration
   public Type visit(VarDecl n) {
-    
-    Type t =  n.t.accept(this);
-    String id =  n.i.toString();
+    Type t = n.t.accept(this);
+    String id = n.i.toString();
 
     // Not inside a method => a field declaration
     if (currMethod == null) {
-
       // Add a field
-      if (!currClass.addVar(id,t)) {
-	 System.out.println(id + "is already defined in " 
-			    + currClass.getId()); 
-	 System.exit(-1);
+
+      if (!currClass.addVar(id, t, 0, 0)) {
+        Variable conflictedVar = currClass.getVar(id);
+        System.err.printf("%s: Redeclaration (%s,%s:%s; %s,%s)%n", id, conflictedVar.getBeginLine(), conflictedVar.getBeginColumn(), conflictedVar.getScopingMethod().getInternalId(), 0, 0);
       }
     } else {
       // Add a local variable
-      if (!currMethod.addVar(id,t)){
-        System.out.println(id + "is already defined in " 
-		           + currClass.getId() + "." + currMethod.getId());
-	System.exit(-1);
+
+      for (Variable conflictedParam : currMethod.params) {
+        if (conflictedParam.getId().equals(id)) {
+          System.err.printf("%s: Redeclaration (%s,%s:%s; %s,%s)%n", id, conflictedParam.getBeginLine(), conflictedParam.getBeginColumn(), conflictedParam.getScopingMethod().getInternalId(), 0, 0);
+          return null;
+        }
+      }
+
+      if (!currMethod.addVar(id, t, 0, 0)) {
+        Variable conflictedVar = currMethod.getVar(id);
+        System.err.printf("%s: Redeclaration (%s,%s:%s; %s,%s)%n", id, conflictedVar.getBeginLine(), conflictedVar.getBeginColumn(), conflictedVar.getScopingMethod().getInternalId(), 0, 0);
       }
     }
+
     return null;
   }
 
@@ -158,24 +164,27 @@ public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
   public Type visit(MethodDecl n) {
     Type t = n.t.accept(this);
     String id = n.i.toString();
-    
-    if (!currClass.addMethod(id,t)){
-	System.out.println("Method " + id 
-			   + "is already defined in " 
-			   + currClass.getId()); 
-	System.exit(-1);
+
+    ArrayList<Type> paramTypes = new ArrayList<>();
+    for (int i = 0; i < n.fl.size(); i++) {
+      paramTypes.add(n.fl.elementAt(i).t);
+    }
+
+    if (!currClass.addMethod(id, t, n.fl, 0, 0)) {
+      Method conflictedMethod = currClass.getMethod(paramTypes, id);
+      System.err.printf("%s: method Redeclaration (%s,%s; %s,%s)%n", id, conflictedMethod.getBeginLine(), conflictedMethod.getBeginColumn(), 0, 0);
     }
 
     // Entering a method scope 
-    currMethod = currClass.getMethod(id);
+    currMethod = currClass.getMethod(paramTypes, id);
 
-    for ( int i = 0; i < n.fl.size(); i++ ) {
+    for (int i = 0; i < n.fl.size(); i++) {
       n.fl.elementAt(i).accept(this);
     }
-    for ( int i = 0; i < n.vl.size(); i++ ) {
+    for (int i = 0; i < n.vl.size(); i++) {
       n.vl.elementAt(i).accept(this);
     }
-    for ( int i = 0; i < n.sl.size(); i++ ) {
+    for (int i = 0; i < n.sl.size(); i++) {
       n.sl.elementAt(i).accept(this);
     }
 
@@ -186,26 +195,8 @@ public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
     return null;
   }
 
-  // Type t;
-  // Identifier i;
-  // 
-  // Register a formal parameter
-  public Type visit(Formal n) {
-      
-    Type t = n.t.accept(this);
-    String id = n.i.toString();
-    
-    if (!currMethod.addParam(id,t)){
-	System.out.println("Formal" + id + "is already defined in " 
-			   + currClass.getId() + "." +
-			   currMethod.getId());
-	System.exit(-1);
-    }
-    return null;
-  }
-
   public Type visit(IntArrayType n) {
-    return n; 
+    return n;
   }
 
   public Type visit(BooleanType n) {
@@ -225,8 +216,8 @@ public class BuildSymbolTableVisitor extends TypeDepthFirstVisitor {
   // Optional for MiniJava (unless variable declaration is allowed inside
   // a block
   public Type visit(Block n) {
-    for ( int i = 0; i < n.sl.size(); i++ ) {
-        n.sl.elementAt(i).accept(this);
+    for (int i = 0; i < n.sl.size(); i++) {
+      n.sl.elementAt(i).accept(this);
     }
     return null;
   }

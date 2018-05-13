@@ -408,18 +408,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
       paramTypes.add(getExpType(param));
     }
 
-    Class clazz = null;
-    if (n.e instanceof NewObject) {
-      clazz = symbolTable.getClass(((NewObject) n.e).i.s);
-    }
-    if (n.e instanceof IdentifierExp) {
-      IdentifierType identifierType = (IdentifierType) symbolTable.getVarType(currMethod, currClass, ((IdentifierExp) n.e).s);
-      clazz = symbolTable.getClass(identifierType.s);
-    }
-    if (n.e instanceof This) {
-      clazz = currClass;
-    }
-
+    Class clazz = symbolTable.getClass(((IdentifierType) getExpType(n.e)).s);
     Method method = clazz.getMethod(paramTypes, n.i.s);
 
     out.print("" +

@@ -106,7 +106,7 @@ public class TypeCheckVisitor extends DepthFirstVisitor {
       n.sl.elementAt(i).accept(this);
     }
 
-    if (symbolTable.compareTypes(retType, n.e.accept(new TypeCheckExpVisitor())) == false) {
+    if (symbolTable.compareTypes(retType, n.e.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable))) == false) {
       System.out.println("Wrong return type for method " + id);
       System.exit(0);
     }
@@ -122,7 +122,7 @@ public class TypeCheckVisitor extends DepthFirstVisitor {
   // Exp e;
   // Statement s1,s2;
   public void visit(If n) {
-    if (!(n.e.accept(new TypeCheckExpVisitor()) instanceof BooleanType)) {
+    if (!(n.e.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable)) instanceof BooleanType)) {
       System.out.println("The condition of while must be of type boolean");
       System.exit(-1);
     }
@@ -133,7 +133,7 @@ public class TypeCheckVisitor extends DepthFirstVisitor {
   // Exp e;
   // Statement s;
   public void visit(While n) {
-    if (!(n.e.accept(new TypeCheckExpVisitor()) instanceof BooleanType)) {
+    if (!(n.e.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable)) instanceof BooleanType)) {
       System.out.println("The condition of while must be of type boolean");
       System.exit(-1);
     }
@@ -142,7 +142,7 @@ public class TypeCheckVisitor extends DepthFirstVisitor {
 
   // Exp e;
   public void visit(Print n) {
-    if (!(n.e.accept(new TypeCheckExpVisitor()) instanceof IntegerType)) {
+    if (!(n.e.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable)) instanceof IntegerType)) {
       System.out.println("The argument of System.out.println must be of type int");
       System.exit(-1);
     }
@@ -152,7 +152,7 @@ public class TypeCheckVisitor extends DepthFirstVisitor {
   // Exp e;
   public void visit(Assign n) {
     Type t1 = symbolTable.getVarType(currMethod, currClass, n.i.toString());
-    Type t2 = n.e.accept(new TypeCheckExpVisitor());
+    Type t2 = n.e.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable));
 
     if (t1 == null) {
       System.err.printf("%s: Unknown identifier (%s,%s:%s)%n", n.i.toString(), 0, 0, currMethod.getInternalId());
@@ -180,12 +180,12 @@ public class TypeCheckVisitor extends DepthFirstVisitor {
       System.exit(-1);
     }
 
-    if (!(n.e1.accept(new TypeCheckExpVisitor()) instanceof IntegerType)) {
+    if (!(n.e1.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable)) instanceof IntegerType)) {
       System.out.printf("The first expression in an array assignment must be of type int (%s,%s:%s)%n", 0, 0, currMethod.getInternalId());
       System.exit(-1);
     }
 
-    if (!(n.e1.accept(new TypeCheckExpVisitor()) instanceof IntegerType)) {
+    if (!(n.e1.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable)) instanceof IntegerType)) {
       System.out.printf("The second expression in an array assignment must be of type int (%s,%s:%s)%n", 0, 0, currMethod.getInternalId());
       System.exit(-1);
     }

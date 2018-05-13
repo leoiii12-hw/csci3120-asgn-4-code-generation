@@ -5,99 +5,90 @@ import syntaxtree.*;
 import java.util.ArrayList;
 
 public class TypeCheckExpVisitor extends TypeDepthFirstVisitor {
-  void p1(String op, String type) {
-    System.out.println("Left operand of " + op + " must be of type " + type);
-  }
 
-  void p2(String op, String type) {
-    System.out.println("Right operand of " + op + " must be of type " + type);
-  }
+  private Class currClass;
+  private Method currMethod;
+  private SymbolTable symbolTable;
 
+  public TypeCheckExpVisitor(Class currClass, Method currMethod, SymbolTable symbolTable) {
+    this.currClass = currClass;
+    this.currMethod = currMethod;
+    this.symbolTable = symbolTable;
+  }
 
   // Exp e1,e2;
   public Type visit(And n) {
     if (!(n.e1.accept(this) instanceof BooleanType)) {
-      p1("&&", "boolean");
-      System.exit(-1);
+      System.err.printf("Left side of AND must be of type boolean (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     if (!(n.e2.accept(this) instanceof BooleanType)) {
-      p2("&&", "boolean");
-      System.exit(-1);
+      System.err.printf("Right side of AND must be of type boolean (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     return new BooleanType();
   }
 
   // Exp e1,e2;
   public Type visit(LessThan n) {
-    if (!(n.e1.accept(this) instanceof IntegerType)) {
-      p1("<", "int");
-      System.exit(-1);
+    if (n.e1.accept(this) instanceof IntegerType && n.e2.accept(this) instanceof IntegerType) {
+      return new BooleanType();
     }
-    if (!(n.e2.accept(this) instanceof IntegerType)) {
-      p2("<", "int");
-      System.exit(-1);
-    }
-    return new BooleanType();
+
+    return null;
   }
 
   // Exp e1,e2;
   public Type visit(Plus n) {
-    if (!(n.e1.accept(this) instanceof IntegerType)) {
-      p1("+", "int");
-      System.exit(-1);
+    if (n.e1.accept(this) instanceof IntegerType && n.e2.accept(this) instanceof IntegerType) {
+      return new IntegerType();
     }
-    if (!(n.e2.accept(this) instanceof IntegerType)) {
-      p2("+", "int");
-      System.exit(-1);
-    }
-    return new IntegerType();
+
+    return null;
   }
 
   // Exp e1,e2;
   public Type visit(Minus n) {
-    if (!(n.e1.accept(this) instanceof IntegerType)) {
-      p1("-", "int");
-      System.exit(-1);
+    if (n.e1.accept(this) instanceof IntegerType && n.e2.accept(this) instanceof IntegerType) {
+      return new IntegerType();
     }
-    if (!(n.e2.accept(this) instanceof IntegerType)) {
-      p2("-", "int");
-      System.exit(-1);
-    }
-    return new IntegerType();
+
+    return null;
   }
 
   // Exp e1,e2;
   public Type visit(Times n) {
-    if (!(n.e1.accept(this) instanceof IntegerType)) {
-      p1("*", "int");
-      System.exit(-1);
+    if (n.e1.accept(this) instanceof IntegerType && n.e2.accept(this) instanceof IntegerType) {
+      return new IntegerType();
     }
-    if (!(n.e2.accept(this) instanceof IntegerType)) {
-      p2("*", "int");
-      System.exit(-1);
-    }
+
     return new IntegerType();
   }
 
   // Exp e1,e2;
   public Type visit(ArrayLookup n) {
     if (!(n.e1.accept(this) instanceof IntArrayType)) {
-      p1("[]", "int []");
-      System.exit(-1);
+      System.out.printf("Left side of ArrayLookup must be of type integer (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     if (!(n.e2.accept(this) instanceof IntegerType)) {
-      p2("[]", "int");
-      System.exit(-1);
+      System.out.printf("Right side of ArrayLookup must be of type integer (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     return new IntegerType();
   }
 
   // Exp e;
   public Type visit(ArrayLength n) {
     if (!(n.e.accept(this) instanceof IntArrayType)) {
-      p1(".length", "int []");
-      System.exit(-1);
+      System.out.printf("Left side of ArrayLength must be of type integer (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     return new IntegerType();
   }
 
@@ -105,36 +96,25 @@ public class TypeCheckExpVisitor extends TypeDepthFirstVisitor {
   // Identifier i;
   // ExpList el;
   public Type visit(Call n) {
+    Type ne = n.e.accept(this);
 
-    if (!(n.e.accept(this) instanceof IdentifierType)) {
-      System.out.println("method " + n.i.toString()
-        + "called  on something that is not a" +
-        " class or Object.");
-      System.exit(-1);
+    if (!(ne instanceof IdentifierType)) {
+      System.err.printf("Method %s should be called on Class or Object, while %s is not a valid class", n.i, n.i);
+      return null;
     }
 
-    String mname = n.i.toString();
-    String cname = ((IdentifierType) n.e.accept(this)).s;
+    String methodId = n.i.toString();
+    String classId = ((IdentifierType) ne).s;
 
     ArrayList<Type> paramTypes = new ArrayList<>();
     for (int i = 0; i < n.el.size(); i++) {
       paramTypes.add(n.el.elementAt(i).accept(this));
     }
+    Method calledMethod = symbolTable.getMethod(paramTypes, methodId, classId);
 
-    Method calledMethod = TypeCheckVisitor.symbolTable.getMethod(paramTypes, mname, cname);
-
-    for (int i = 0; i < n.el.size(); i++) {
-      Type t1 = null;
-      Type t2 = null;
-
-      if (calledMethod.getParamAt(i) != null)
-        t1 = calledMethod.getParamAt(i).getType();
-      t2 = n.el.elementAt(i).accept(this);
-      if (!TypeCheckVisitor.symbolTable.compareTypes(t1, t2)) {
-        System.out.println("Type Error in arguments passed to " +
-          cname + "." + mname);
-        System.exit(-1);
-      }
+    if (calledMethod == null) {
+      System.err.printf("Method %s not defined in %s (%s,%s:%s)%n", methodId, classId, 0, 0, 0);
+      return null;
     }
 
     return calledMethod.getType();
@@ -155,21 +135,21 @@ public class TypeCheckExpVisitor extends TypeDepthFirstVisitor {
 
   // String s;
   public Type visit(IdentifierExp n) {
-    return TypeCheckVisitor.symbolTable.getVarType(TypeCheckVisitor.currMethod,
-      TypeCheckVisitor.currClass, n.s);
+    Type type = symbolTable.getVarType(currMethod, currClass, n.s);
+    return type;
   }
 
   public Type visit(This n) {
-    return TypeCheckVisitor.currClass.getType();
+    return currClass.getType();
   }
 
   // Exp e;
   public Type visit(NewArray n) {
-
     if (!(n.e.accept(this) instanceof IntegerType)) {
-      p1("new int []", "int");
-      System.exit(-1);
+      System.err.printf("NewArray operand must be of type boolean (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     return new IntArrayType();
   }
 
@@ -181,17 +161,11 @@ public class TypeCheckExpVisitor extends TypeDepthFirstVisitor {
   // Exp e;
   public Type visit(Not n) {
     if (!(n.e.accept(this) instanceof BooleanType)) {
-      p2("!", "boolean");
-      System.exit(-1);
+      System.err.printf("Not operand must be of type boolean (%s,%s:%s)%n", 0, 0, 0);
+      return null;
     }
+
     return new BooleanType();
   }
 
 }
-//TypeCheckVisitor.
-
-
-
-
-
-

@@ -423,22 +423,24 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     Method method = clazz.getMethod(paramTypes, n.i.s);
 
     out.print("" +
+      "# public void visit(Call n)\n" +
       "sw $fp, 0($sp)\n" +
       "addiu $sp, $sp, -4\n"
     );
 
-    // TODO: formals
+    // Reverse order
     for (int i = n.el.size() - 1; i >= 0; i--) {
       n.el.elementAt(i).accept(this);
 
       out.print("" +
-        "sw $a0, 0($sp)\n" +
+        "sw $a0, 0($sp) # formal " + i + "\n" +
         "addiu $sp, $sp, -4\n");
     }
 
     out.print("" +
       "jal " + "_fun_" + method.getUniqueId() + "\n" +
-      "move $a0, $v0\n");
+      "move $a0, $v0\n" +
+      "# public void visit(Call n) end\n\n");
   }
 
   // Exp e;
@@ -569,7 +571,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   }
 
   private Type getExpType(Exp e) {
-    return e.accept(new TypeCheckExpVisitor());
+    return e.accept(new TypeCheckExpVisitor(currClass, currMethod, symbolTable));
   }
 
   private int getVarInternalId(String s) {

@@ -77,15 +77,28 @@ public class CodeGenVisitor extends DepthFirstVisitor {
 
     int numOfFields = currClass.fields.size();
 
-    out.println("" +
+    // _alloc_Foo
+    // $v0 = object address
+
+    out.print("" +
       "_alloc_" + currClass.getId() + ":\n" +
 
-      "li $a0, " + numOfFields + "\n" +
-      "sll $a0, $a0, 2   # multiple by 4 bytes\n" +
-      "li $v0, 9         # allocate space\n" +
+      "li $a0, " + (1 + numOfFields) * 4 + "\n" +
+      "li $v0, 9\n" +
       "syscall\n" +
 
-      "jr $ra\n");
+      // Store size
+      "sw $a0, 0($v0)\n");
+
+    // Initialize fields
+    out.print("li $t0, 0\n");
+    for (int i = 0; i < numOfFields; i++) {
+      out.print("sw $t0, " + i * 4 + "($v0)\n");
+    }
+
+    // Return
+    out.print("" +
+      "jr $ra\n\n");
 
     for (int i = 0; i < n.ml.size(); i++) {
       n.ml.elementAt(i).accept(this);
@@ -113,31 +126,34 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     out.print("" +
       "_fun_" + currMethod.getUniqueId() + ":\n" +
       "move $fp, $sp\n" +
-      "addiu $sp, $sp, -4\n" +
-      "sw $ra, 4($sp)\n");
+      "sw $ra, 0($sp)\n" +
+      "addiu $sp, $sp, -4\n");
 
     out.print("# cgen(body)\n");
 
+    // vl
     for (int i = 0; i < n.vl.size(); i++) {
       n.vl.elementAt(i).accept(this);
     }
 
+    // sl
     for (int i = 0; i < n.sl.size(); i++) {
       n.sl.elementAt(i).accept(this);
     }
 
+    // return
     n.e.accept(this);
-    out.println("move $v0, $a0\n");
+    out.print("move $v0, $a0\n");
 
     out.print("# cgen(body) end\n");
 
     // The first one is the object
-    int numOfArguments = currMethod.params.size() + 1;
+    int numOfArguments = currMethod.params.size();
     out.print("" +
       "lw $ra, 4($sp)\n" +
-      "addiu $sp, $sp, " + numOfArguments * 4 + "\n" +
+      "addiu $sp, $sp, " + (numOfArguments * 4 + 8) + "\n" +
       "lw $fp, 0($sp)\n" +
-      "jr $ra\n");
+      "jr $ra\n\n");
   }
 
   private static int numOfIf = 0;
@@ -379,41 +395,53 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     }
   }
 
+  private Type getExpressionType(Exp e) {
+    if (e instanceof IntegerLiteral) return new IntegerType();
+    if (e instanceof True) return new BooleanType();
+    if (e instanceof False) return new BooleanType();
+    if (e instanceof IdentifierExp) return currMethod.getVar(((IdentifierExp) e).s).getType();
+    if (e instanceof This) return currClass.getType();
+    if (e instanceof NewArray) return new IntArrayType();
+    if (e instanceof NewObject) return new IdentifierType(((NewObject) e).i.s);
+
+    return null;
+  }
+
   // Exp e;
   // Identifier i;
   // ExpList el;
   // cgen: e.i(el)
   public void visit(Call n) {
     ArrayList<Type> paramTypes = new ArrayList<>();
-//    for (int i = 0; i < n.el.size(); i++) {
-//      paramTypes.add(n.el.elementAt(i))
-//TODO    }
+    for (int i = 0; i < n.el.size(); i++) {
+      Exp param = n.el.elementAt(i);
+      paramTypes.add(getExpressionType(param));
+    }
 
-    Method method = null;
-
+    Class clazz = null;
     if (n.e instanceof NewObject) {
-      method = symbolTable.getMethod(paramTypes, n.i.s, ((NewObject) n.e).i.s);
+      clazz = symbolTable.getClass(((NewObject) n.e).i.s);
+    }
+    if (n.e instanceof IdentifierExp) {
+      IdentifierType identifierType = (IdentifierType) symbolTable.getVarType(currMethod, currClass, ((IdentifierExp) n.e).s);
+      clazz = symbolTable.getClass(identifierType.s);
+    }
+    if (n.e instanceof This) {
+      clazz = currClass;
     }
 
-    if (method == null) {
-      return;
-    }
+    Method method = clazz.getMethod(paramTypes, n.i.s);
 
     out.print("" +
       "sw $fp, 0($sp)\n" +
-      "addiu $sp, $sp, -4\n" +
-
-      "# cgen(formals)\n" +
-
-      "# cgen(formal_1)\n" +
-      "sw $a0, 0($sp)\n" +
-      "addiu $sp, $sp, -4\n" +
-
-      "# cgen(formals) end\n" +
-
-      "jal " + "_fun_" + method.getUniqueId() + "\n" +
-      "move $a0, $v0\n"
+      "addiu $sp, $sp, -4\n"
     );
+
+    // TODO: formals
+
+    out.print("" +
+      "jal " + "_fun_" + method.getUniqueId() + "\n" +
+      "move $a0, $v0\n");
   }
 
   // Exp e;

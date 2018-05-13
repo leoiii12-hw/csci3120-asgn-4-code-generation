@@ -17,12 +17,17 @@ class SymbolTable {
 
   public SymbolTable() {
     autoIncrementalClassId = 0;
+    autoIncrementalMethodId = 0;
+    autoIncrementalVariableId = 0;
     hashtable = new Hashtable<String, Class>();
   }
 
   // Register the class name and map it to a new class (with its supperclass)
   // Return false if there is a name conflicts. Otherwise return true.
   public boolean addClass(String id, String parent, int beginLine, int beginColumn) {
+    autoIncrementalMethodId = 0;
+    autoIncrementalVariableId = 0;
+
     if (containsClass(id))
       return false;
     else
@@ -195,6 +200,8 @@ class Class {
   // 
   // Return false if there is a name conflict (among all method names only)
   public boolean addMethod(String id, Type type, FormalList fl, int beginLine, int beginColumn) {
+    SymbolTable.autoIncrementalVariableId = 0;
+
     ArrayList<Type> paramTypes = new ArrayList<>();
     for (int i = 0; i < fl.size(); i++) {
       paramTypes.add(fl.elementAt(i).t);

@@ -398,7 +398,7 @@ class Method {
   // X_y(int x, int y)
   public String getUniqueId() {
     StringBuilder builder = new StringBuilder();
-    builder.append(scopingClass.getId()).append("_").append(id).append("_");
+    builder.append(scopingClass.getId()).append("__").append(id).append("_");
     builder.append(getParamsAsString());
     builder.append("_");
 
@@ -430,11 +430,11 @@ class Method {
       Variable var = params.get(i);
 
       builder.append(var.getType());
-      builder.append(" ");
+      builder.append("_");
       builder.append(var.getId());
 
       if (i != paramsSize - 1) {
-        builder.append(", ");
+        builder.append("__");
       }
     }
 

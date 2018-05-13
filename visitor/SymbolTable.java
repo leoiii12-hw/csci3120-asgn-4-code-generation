@@ -324,9 +324,9 @@ class Variable {
 
   public String getUniqueId() {
     if (scopingMethod == null) {
-      return scopingClass.getId() + "::" + id;
+      return scopingClass.getId() + "_" + id;
     } else {
-      return scopingClass.getId() + "::" + scopingMethod.getId() + "::" + id;
+      return scopingClass.getId() + "_" + scopingMethod.getId() + "_" + id;
     }
   }
 
@@ -388,12 +388,12 @@ class Method {
     return id;
   }
 
-  // X::y(int x, int y)
+  // X_y(int x, int y)
   public String getUniqueId() {
     StringBuilder builder = new StringBuilder();
-    builder.append(scopingClass.getId()).append("::").append(id).append("(");
+    builder.append(scopingClass.getId()).append("_").append(id).append("_");
     builder.append(getParamsAsString());
-    builder.append(")");
+    builder.append("_");
 
     return builder.toString();
   }

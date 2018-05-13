@@ -73,6 +73,25 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // VarDeclList vl;
   // MethodDeclList ml;
   public void visit(ClassDeclSimple n) {
+    currClass = symbolTable.getClass(n.i.s);
+
+    int numOfFields = currClass.fields.size();
+
+    out.println("" +
+      "_alloc_" + currClass.getId() + ":\n" +
+
+      "li $a0, " + numOfFields + "\n" +
+      "sll $a0, $a0, 2   # multiple by 4 bytes\n" +
+      "li $v0, 9         # allocate space\n" +
+      "syscall\n" +
+
+      "jr $ra\n");
+
+    for (int i = 0; i < n.ml.size(); i++) {
+      n.ml.elementAt(i).accept(this);
+    }
+
+    currClass = null;
   }
 
   // Type t;
@@ -83,6 +102,42 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // Exp e;
   // cgen: t i(fl) { vl sl return e; }
   public void visit(MethodDecl n) {
+    String id = n.i.toString();
+
+    ArrayList<Type> paramTypes = new ArrayList<>();
+    for (int i = 0; i < n.fl.size(); i++) {
+      paramTypes.add(n.fl.elementAt(i).t);
+    }
+    currMethod = currClass.getMethod(paramTypes, id);
+
+    out.print("" +
+      "_fun_" + currMethod.getUniqueId() + ":\n" +
+      "move $fp, $sp\n" +
+      "addiu $sp, $sp, -4\n" +
+      "sw $ra, 4($sp)\n");
+
+    out.print("# cgen(body)\n");
+
+    for (int i = 0; i < n.vl.size(); i++) {
+      n.vl.elementAt(i).accept(this);
+    }
+
+    for (int i = 0; i < n.sl.size(); i++) {
+      n.sl.elementAt(i).accept(this);
+    }
+
+    n.e.accept(this);
+    out.println("move $v0, $a0\n");
+
+    out.print("# cgen(body) end\n");
+
+    // The first one is the object
+    int numOfArguments = currMethod.params.size() + 1;
+    out.print("" +
+      "lw $ra, 4($sp)\n" +
+      "addiu $sp, $sp, " + numOfArguments * 4 + "\n" +
+      "lw $fp, 0($sp)\n" +
+      "jr $ra\n");
   }
 
   private static int numOfIf = 0;
@@ -329,6 +384,36 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // ExpList el;
   // cgen: e.i(el)
   public void visit(Call n) {
+    ArrayList<Type> paramTypes = new ArrayList<>();
+//    for (int i = 0; i < n.el.size(); i++) {
+//      paramTypes.add(n.el.elementAt(i))
+//TODO    }
+
+    Method method = null;
+
+    if (n.e instanceof NewObject) {
+      method = symbolTable.getMethod(paramTypes, n.i.s, ((NewObject) n.e).i.s);
+    }
+
+    if (method == null) {
+      return;
+    }
+
+    out.print("" +
+      "sw $fp, 0($sp)\n" +
+      "addiu $sp, $sp, -4\n" +
+
+      "# cgen(formals)\n" +
+
+      "# cgen(formal_1)\n" +
+      "sw $a0, 0($sp)\n" +
+      "addiu $sp, $sp, -4\n" +
+
+      "# cgen(formals) end\n" +
+
+      "jal " + "_fun_" + method.getUniqueId() + "\n" +
+      "move $a0, $v0\n"
+    );
   }
 
   // Exp e;
@@ -345,6 +430,11 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // Identifier i;
   // cgen: new n
   public void visit(NewObject n) {
+    Class newObjectClass = symbolTable.getClass(n.i.s);
+
+    out.print("" +
+      "jal _alloc_" + newObjectClass.getId() + "\n" +
+      "move $a0, $v0\n");
   }
 
   // Exp e;

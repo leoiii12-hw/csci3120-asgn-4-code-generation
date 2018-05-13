@@ -148,7 +148,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     out.print("# cgen(body) end\n");
 
     // The first one is the object
-    int numOfArguments = currMethod.params.size();
+    int numOfArguments = 1 + currMethod.params.size(); // With object itselft as the first argument
     out.print("" +
       "lw $ra, 4($sp)\n" +
       "addiu $sp, $sp, " + (numOfArguments * 4 + 8) + "\n" +
@@ -204,7 +204,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
       whileBranchName + ":\n");
 
     n.e.accept(this);
-    out.print("beq $a0, $0, " + endWhileBranchName);
+    out.print("beq $a0, $0, " + endWhileBranchName + "\n");
 
     n.s.accept(this);
     out.print("j " + whileBranchName + "\n");
@@ -246,17 +246,16 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   public void visit(ArrayAssign n) {
     int internalId = getVarInternalId(n.i.s);
 
+    out.print("# public void visit(ArrayAssign n)\n");
+
     n.e2.accept(this);
     out.print("" +
-      // Store assigning value in $a2
-      "move $a2, $a0\n");
+      "move $a2, $a0 # Store assigning value in $a2\n");
 
     // $a0 is the wanting index
     n.e1.accept(this);
 
     out.print("" +
-      "# public void visit(ArrayAssign n)\n" +
-
       "addi $a0, $a0, 1 # $a0 is the calculated index\n" +
 
       "li $t1, 4\n" +
@@ -265,7 +264,9 @@ public class CodeGenVisitor extends DepthFirstVisitor {
       "lw $a1, " + (internalId) * 4 + "($fp)\n" +
       "add $t0, $a1, $t1 # calculate the actual address\n" +
 
-      "sw $a2, 0($t0) # save value\n\n");
+      "sw $a2, 0($t0) # save value\n");
+
+    out.print("# public void visit(ArrayAssign n) end\n\n");
   }
 
   // Exp e1,e2;
@@ -361,40 +362,34 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // Exp e1,e2;
   // cgen: e1[e2]
   public void visit(ArrayLookup n) {
-    if (n.e1 instanceof IdentifierExp) {
-      String s = ((IdentifierExp) n.e1).s;
+    // $a1 is the base address
+    n.e1.accept(this);
+    out.print("" +
+      "move $a1, $a0\n");
 
-      int internalId = getVarInternalId(s);
+    // $a0 is the index
+    n.e2.accept(this);
 
-      // $a0 is the index
-      n.e2.accept(this);
-
-      out.print("" +
-        "# public void visit(ArrayLookup n)\n" +
-        "addi $a0, $a0, 1 # the first one is the calculated index\n" +
-        "li $t1, 4\n" +
-        "mul $t1, $t1, $a0 # multiply 4 as words\n" +
-        "lw $a1, " + (internalId) * 4 + "($fp) # load base address\n" +
-        "add $t0, $a1, $t1\n" +
-        "lw $a0, 0($t0) # load value\n\n");
-    }
-
-    // TODO
+    out.print("" +
+      "# public void visit(ArrayLookup n)\n" +
+      "addi $a0, $a0, 1 # the first one is the calculated index\n" +
+      "li $t1, 4\n" +
+      "mul $t1, $t1, $a0 # multiply 4 as words\n" +
+      "add $t0, $a1, $t1\n" +
+      "lw $a0, 0($t0) # load value\n\n");
   }
 
   // Exp e;
   // cgen: e.length
   public void visit(ArrayLength n) {
-    if (n.e instanceof IdentifierExp) {
-      int internalId = getVarInternalId(((IdentifierExp) n.e).s);
+    // $a1 is the base address
+    n.e.accept(this);
+    out.print("" +
+      "move $a1, $a0\n");
 
-      out.print("" +
-        "# public void visit(ArrayLength n)\n" +
-        "lw $a0, " + (internalId) * 4 + "($fp)\n" +
-        "lw $a0, 0($a0)\n\n");
-    }
-
-    // TODO
+    out.print("" +
+      "# public void visit(ArrayLength n)\n" +
+      "lw $a0, 0($a1)\n\n");
   }
 
   // Exp e;
@@ -416,6 +411,12 @@ public class CodeGenVisitor extends DepthFirstVisitor {
       "sw $fp, 0($sp)\n" +
       "addiu $sp, $sp, -4\n"
     );
+
+    // Get object address in $a0
+    n.e.accept(this);
+    out.print("" +
+      "sw $a0, 0($sp) # object\n" +
+      "addiu $sp, $sp, -4\n");
 
     // Reverse order
     for (int i = n.el.size() - 1; i >= 0; i--) {
@@ -569,15 +570,14 @@ public class CodeGenVisitor extends DepthFirstVisitor {
 
     if (currMethod.containsVar(s)) {
       var = currMethod.getVar(s);
-      internalId = -1;
+      internalId = var.getInternalId() * -1;
     } else if (currMethod.containsParam(s)) {
       var = currMethod.getParam(s);
-      internalId = 1;
+      internalId = var.getInternalId();
     } else {
       System.err.println("Uncaught IdentifierExp");
     }
 
-    internalId = internalId * var.getInternalId();
     return internalId;
   }
 

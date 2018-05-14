@@ -93,7 +93,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     // Initialize fields
     out.print("li $t0, 0\n");
     for (int i = 0; i < numOfFields; i++) {
-      out.print("sw $t0, " + i * 4 + "($v0)\n");
+      out.print("sw $t0, " + (i * 4 + 4) + "($v0)\n");
     }
 
     // Return
@@ -224,20 +224,25 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // Exp e;
   // cgen: i = e
   public void visit(Assign n) {
-    int internalId = getVarInternalId(n.i.s);
+    out.print("" +
+      "# public void visit(Assign n)\n");
+
+    if (currMethod.containsParam(n.i.s) || currMethod.containsVar(n.i.s)) {
+      int internalId = getVarInternalId(n.i.s);
+
+      n.e.accept(this);
+
+      out.print("sw $a0, " + (internalId) * 4 + "($fp)\n");
+    } else {
+      n.e.accept(this);
+
+      out.print("" +
+        "lw $t0, " + (currMethod.params.size() * 4 + 4) + "($fp)\n" +
+        "sw $a0, " + (currClass.getVar(n.i.s).getInternalId() * 4 + 4) + "($t0)\n");
+    }
 
     out.print("" +
-      "# public void visit(Assign n)\n"
-    );
-
-    n.e.accept(this);
-
-    out.print("" +
-      "sw $a0, " + (internalId) * 4 + "($fp)\n");
-
-    out.print("" +
-      "# public void visit(Assign n) end\n\n"
-    );
+      "# public void visit(Assign n) end\n\n");
   }
 
   // Identifier i;
@@ -415,7 +420,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     // Get object address in $a0
     n.e.accept(this);
     out.print("" +
-      "sw $a0, 0($sp) # object\n" +
+      "sw $a0, 0($sp) # get object address\n" +
       "addiu $sp, $sp, -4\n");
 
     // Reverse order
@@ -495,14 +500,16 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // String s;
   // cgen: Load the value of the variable n.s (which can be a local variable, parameter, or field)
   public void visit(IdentifierExp n) {
-    int internalId = getVarInternalId(n.s);
-
-    out.print("" +
-      "# public void visit(IdentifierExp n)\n" +
-      "lw $a0, " + (internalId) * 4 + "($fp)\n");
+    if (currMethod.containsParam(n.s) || currMethod.containsVar(n.s)) {
+      int internalId = getVarInternalId(n.s);
+      out.print("lw $a0, " + (internalId * 4) + "($fp) # public void visit(IdentifierExp n)\n");
+    } else {
+      out.print("lw $t0, " + (currMethod.params.size() * 4 + 4) + "($fp) # public void visit(IdentifierExp n)\n");
+      out.print("lw $a0, " + (currClass.getVar(n.s).getInternalId() * 4 + 4) + "($t0)\n");
+    }
   }
 
-  void cgen_supporting_functions() {
+  private void cgen_supporting_functions() {
     out.println("" +
       "_print_int:      # System.out.println(int)\n" +
 
@@ -574,8 +581,10 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     } else if (currMethod.containsParam(s)) {
       var = currMethod.getParam(s);
       internalId = var.getInternalId();
+    } else if (currClass.containsVar(s)) {
+      // TODO
     } else {
-      System.err.println("Uncaught IdentifierExp");
+      System.err.println("Uncaught getVarInternalId(String s)");
     }
 
     return internalId;

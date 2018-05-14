@@ -204,12 +204,14 @@ public class CodeGenVisitor extends DepthFirstVisitor {
       whileBranchName + ":\n");
 
     n.e.accept(this);
-    out.print("beq $a0, $0, " + endWhileBranchName + "\n");
+    out.print("beq $a0, $0, " + endWhileBranchName + " # while condition\n");
 
     n.s.accept(this);
-    out.print("j " + whileBranchName + "\n");
+    out.print("j " + whileBranchName + " # while jump\n");
 
     out.print(endWhileBranchName + ":\n");
+
+    out.print("# public void visit(While n) end\n\n");
   }
 
   // Exp e;
@@ -230,6 +232,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
     if (currMethod.containsParam(n.i.s) || currMethod.containsVar(n.i.s)) {
       int internalId = getVarInternalId(n.i.s);
 
+      // Evaluate the assigning value
       n.e.accept(this);
 
       out.print("sw $a0, " + (internalId) * 4 + "($fp)\n");
@@ -238,7 +241,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
 
       out.print("" +
         "lw $t0, " + (currMethod.params.size() * 4 + 4) + "($fp)\n" +
-        "sw $a0, " + (currClass.getVar(n.i.s).getInternalId() * 4 + 4) + "($t0)\n");
+        "sw $a0, " + (currClass.getVar(n.i.s).getInternalId() * 4) + "($t0)\n");
     }
 
     out.print("" +
@@ -249,27 +252,37 @@ public class CodeGenVisitor extends DepthFirstVisitor {
   // Exp e1,e2;
   // cgen: i[e1] = e2
   public void visit(ArrayAssign n) {
-    int internalId = getVarInternalId(n.i.s);
-
     out.print("# public void visit(ArrayAssign n)\n");
 
+    // Evaluate the assigning value
     n.e2.accept(this);
-    out.print("" +
-      "move $a2, $a0 # Store assigning value in $a2\n");
+    out.print("move $a2, $a0 # Store assigning value in $a2\n");
 
-    // $a0 is the wanting index
+    // Calculate the relative address
     n.e1.accept(this);
-
     out.print("" +
       "addi $a0, $a0, 1 # $a0 is the calculated index\n" +
 
       "li $t1, 4\n" +
-      "mul $t1, $t1, $a0 # multiply 4 as words and store in $t1\n" +
+      "mul $t1, $t1, $a0 # multiply 4 as words and store in $t1\n");
 
-      "lw $a1, " + (internalId) * 4 + "($fp)\n" +
-      "add $t0, $a1, $t1 # calculate the actual address\n" +
+    if (currMethod.containsParam(n.i.s) || currMethod.containsVar(n.i.s)) {
+      int internalId = getVarInternalId(n.i.s);
 
-      "sw $a2, 0($t0) # save value\n");
+      // Save
+      out.print("" +
+        "lw $a1, " + (internalId) * 4 + "($fp) # base array address\n" +
+        "add $t0, $a1, $t1 # calculate the actual address\n" +
+
+        "sw $a2, 0($t0) # save value\n");
+    } else {
+      out.print("" +
+        "lw $t0, " + (currMethod.params.size() * 4 + 4) + "($fp)\n" +
+        "lw $a1, " + (currClass.getVar(n.i.s).getInternalId() * 4) + "($t0) # base array address\n" +
+        "add $t0, $a1, $t1 # calculate the actual address\n" +
+
+        "sw $a2, 0($t0) # save value\n");
+    }
 
     out.print("# public void visit(ArrayAssign n) end\n\n");
   }
@@ -377,7 +390,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
 
     out.print("" +
       "# public void visit(ArrayLookup n)\n" +
-      "addi $a0, $a0, 1 # the first one is the calculated index\n" +
+      "addi $a0, $a0, 1 # $a0 is the calculated index\n" +
       "li $t1, 4\n" +
       "mul $t1, $t1, $a0 # multiply 4 as words\n" +
       "add $t0, $a1, $t1\n" +
@@ -505,7 +518,7 @@ public class CodeGenVisitor extends DepthFirstVisitor {
       out.print("lw $a0, " + (internalId * 4) + "($fp) # public void visit(IdentifierExp n)\n");
     } else {
       out.print("lw $t0, " + (currMethod.params.size() * 4 + 4) + "($fp) # public void visit(IdentifierExp n)\n");
-      out.print("lw $a0, " + (currClass.getVar(n.s).getInternalId() * 4 + 4) + "($t0)\n");
+      out.print("lw $a0, " + (currClass.getVar(n.s).getInternalId() * 4) + "($t0)\n");
     }
   }
 
